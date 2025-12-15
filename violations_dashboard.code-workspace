@@ -1,0 +1,55 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../../violations_dashboard_app"
+		}
+	],
+	"settings": {
+		"workbench.colorCustomizations": {},
+		"folder-color.pathColors": [
+			{
+				"folderPath": "data-in-js-exercises/",
+				"color": "foldercolorizer.color_660099"
+			},
+			{
+				"folderPath": "/Users/sydneyjoneswellborn/Documents/GitHub/JavaScript_6116/course-info/",
+				"badge": "🌲"
+			},
+			{
+				"folderPath": "data-in-js-exercises/exercises/part1-accessing-data/1-phl-polling-places/",
+				"badge": "❇️"
+			},
+			{
+				"folderPath": "violations_dashboard/",
+				"color": "foldercolorizer.color_0099ff"
+			},
+			{
+				"folderPath": "violations_dashboard/dashboard-project-examples/",
+				"color": "foldercolorizer.color_ff0033"
+			},
+			{
+				"folderPath": "violations_dashboard/css/",
+				"color": "foldercolorizer.color_cc99ff"
+			},
+			{
+				"folderPath": "violations_dashboard/data/",
+				"color": "foldercolorizer.color_cc99ff"
+			},
+			{
+				"folderPath": "violations_dashboard/js/",
+				"color": "foldercolorizer.color_cc99ff"
+			},
+			{
+				"folderPath": "violations_dashboard/INSTRUCTIONS.md/",
+				"color": "foldercolorizer.color_006699"
+			},
+			{
+				"folderPath": "violations_dashboard/App.js/",
+				"color": "foldercolorizer.color_669966"
+			}
+		]
+	}
+}
