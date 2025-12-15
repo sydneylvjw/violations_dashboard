@@ -1,9 +1,7 @@
-// these are the components to render filterable code violation markers on the map
 import { useEffect, useMemo, useState } from "react";
 import { GeoJSON } from "react-leaflet";
 import L from "leaflet";
 
-//  defining features to create a gradient for each filter
 const FILTER_COLORS = {
   YEARS: "#c1cbaf",
   STATUSES: "#9daaa0",
@@ -12,10 +10,23 @@ const FILTER_COLORS = {
   PRIORITY: "#cec073",
 };
 
+const getFeatureKey = (feature) => {
+  if (!feature) return null;
+  const coords = Array.isArray(feature.geometry?.coordinates)
+    ? feature.geometry.coordinates.join(",")
+    : "";
+  const address = feature.properties?.address ?? "";
+  const year = feature.properties?.violation_year ?? "";
+  return `${coords}|${year}|${address}`;
+};
 
-// man rendering function
-export default function ViolationsLayer({ violationFilters, onSummaryChange }) {
-
+export default function ViolationsLayer({
+  violationFilters,
+  onSummaryChange,
+  onFeatureSelect,
+  onCountChange,
+  selectedFeature,
+}) {
   const vf = violationFilters || {};
   const yearsFilter = Array.isArray(vf.YEARS) ? vf.YEARS : [];
   const statusesFilter = Array.isArray(vf.STATUSES) ? vf.STATUSES : [];
@@ -24,11 +35,7 @@ export default function ViolationsLayer({ violationFilters, onSummaryChange }) {
   const priorityFilter = Array.isArray(vf.PRIORITY) ? vf.PRIORITY : [];
   const councilFilter = vf.COUNCILDIST ?? null;
 
-
-  // 1. Merge all panels ONCE (static data)
   const [allFeatures, setAllFeatures] = useState([]);
-
-
 
   useEffect(() => {
     let cancelled = false;
@@ -44,23 +51,30 @@ export default function ViolationsLayer({ violationFilters, onSummaryChange }) {
     };
   }, []);
 
-  // 2. Apply filters
-
   const filteredFeatures = useMemo(() => {
     return allFeatures.filter((feature) => {
       const props = feature.properties || {};
 
       const yearValue = Number(props.violation_year);
       if (
-        yearsFilter.length && !yearsFilter.includes(Number.isNaN(yearValue) ? null : yearValue)
-      ) return false;
+        yearsFilter.length &&
+        !yearsFilter.includes(Number.isNaN(yearValue) ? null : yearValue)
+      )
+        return false;
 
-
-      if (statusesFilter.length && !statusesFilter.includes(String(props.casestatus))) return false;
-      if (inspectFilter.length && !inspectFilter.includes(String(props.inspect_district))) return false;
-      if (councilFilter != null && String(props.council_district) !== String(councilFilter)) return false;
-      if (resolutionFilter.length && !resolutionFilter.includes(String(props.violationresolutioncode))) return false;
-      if (priorityFilter.length && !priorityFilter.includes(String(props.caseprioritydesc))) return false;
+      if (statusesFilter.length && !statusesFilter.includes(String(props.casestatus)))
+        return false;
+      if (inspectFilter.length && !inspectFilter.includes(String(props.inspect_district)))
+        return false;
+      if (councilFilter != null && String(props.council_district) !== String(councilFilter))
+        return false;
+      if (
+        resolutionFilter.length &&
+        !resolutionFilter.includes(String(props.violationresolutioncode))
+      )
+        return false;
+      if (priorityFilter.length && !priorityFilter.includes(String(props.caseprioritydesc)))
+        return false;
       return true;
     });
   }, [
@@ -73,9 +87,13 @@ export default function ViolationsLayer({ violationFilters, onSummaryChange }) {
     councilFilter,
   ]);
 
+  useEffect(() => {
+    if (typeof onCountChange === "function") {
+      onCountChange(filteredFeatures.length);
+    }
+  }, [filteredFeatures, onCountChange]);
 
-  // summary count effect
- useEffect(() => {
+  useEffect(() => {
     if (typeof onSummaryChange !== "function") return;
 
     const buildCounts = (field, selectedValues) => {
@@ -89,14 +107,17 @@ export default function ViolationsLayer({ violationFilters, onSummaryChange }) {
       });
     };
 
-     const summary = {};
+    const summary = {};
     const yearCounts = buildCounts("violation_year", yearsFilter);
     if (yearCounts) summary.YEARS = yearCounts;
     const statusCounts = buildCounts("casestatus", statusesFilter);
     if (statusCounts) summary.STATUSES = statusCounts;
     const inspectCounts = buildCounts("inspect_district", inspectFilter);
     if (inspectCounts) summary.INSPECTDIST = inspectCounts;
-    const resolutionCounts = buildCounts("violationresolutioncode", resolutionFilter);
+    const resolutionCounts = buildCounts(
+      "violationresolutioncode",
+      resolutionFilter
+    );
     if (resolutionCounts) summary.RESOLUTIONCODE = resolutionCounts;
     const priorityCounts = buildCounts("caseprioritydesc", priorityFilter);
     if (priorityCounts) summary.PRIORITY = priorityCounts;
@@ -120,184 +141,104 @@ export default function ViolationsLayer({ violationFilters, onSummaryChange }) {
     [filteredFeatures]
   );
 
-const pointToLayer = (feature, latlng) => {
-  const layers = [];
+  const selectedKey = getFeatureKey(selectedFeature);
 
-  // base halo
-  layers.push(
-    L.circleMarker(latlng, {
-      radius: 7,
-      fillColor: "rgba(17,24,39,0.35)",
-      color: "rgba(249,115,22,0.25)",
-      weight: 1,
-      opacity: 1,
-      fillOpacity: 0.6,
-    })
-  );
+  const pointToLayer = (feature, latlng) => {
+    const featureKey = getFeatureKey(feature);
+    const isSelected = selectedKey && selectedKey === featureKey;
 
-  // core marker
-  layers.push(
-    L.circleMarker(latlng, {
-      radius: 4.5,
-      fillColor: "#111827",
-      color: "#f97316",
-      weight: 1.4,
-      opacity: 1,
-      fillOpacity: 0.95,
-    })
-  );
+    if (selectedKey && !isSelected) {
+      return null;
+    }
 
-  const rings = [
-    yearsFilter.length && FILTER_COLORS.YEARS,
-    statusesFilter.length && FILTER_COLORS.STATUSES,
-    inspectFilter.length && FILTER_COLORS.INSPECTDIST,
-    resolutionFilter.length && FILTER_COLORS.RESOLUTIONCODE,
-    priorityFilter.length && FILTER_COLORS.PRIORITY,
-  ].filter(Boolean);
+    const layers = [];
+    const baseRadius = 5;
+    const fadedOpacity = 1;
 
-  rings.forEach((color, idx) => {
     layers.push(
       L.circleMarker(latlng, {
-        radius: Math.max(1.2, 3.6 - idx * 0.6),
-        fillColor: color,
-        color,
+        radius: baseRadius + 2,
+        fillColor: "rgba(17,24,39,0.35)",
+        color: "rgba(249,115,22,0.25)",
         weight: 1,
-        opacity: 1,
-        fillOpacity: 0.95,
+        opacity: fadedOpacity,
+        fillOpacity: 0.5 * fadedOpacity,
       })
     );
-  });
 
-  // inner dot
-  layers.push(
-    L.circleMarker(latlng, {
-      radius: 1.2,
-      fillColor: "#fff",
-      color: "transparent",
-      opacity: 0.9,
-      fillOpacity: 0.9,
-    })
-  );
+    layers.push(
+      L.circleMarker(latlng, {
+        radius: baseRadius,
+        fillColor: "#111827",
+        color: "#f97316",
+        weight: isSelected ? 1.6 : 1,
+        opacity: isSelected ? 1 : fadedOpacity,
+        fillOpacity: isSelected ? 0.95 : 0.9 * fadedOpacity,
+      })
+    );
 
-  return L.featureGroup(layers);
-};
+    const rings = [
+      yearsFilter.length && FILTER_COLORS.YEARS,
+      statusesFilter.length && FILTER_COLORS.STATUSES,
+      inspectFilter.length && FILTER_COLORS.INSPECTDIST,
+      resolutionFilter.length && FILTER_COLORS.RESOLUTIONCODE,
+      priorityFilter.length && FILTER_COLORS.PRIORITY,
+    ].filter(Boolean);
 
-  const onEachFeature = (feature, layer, onFeatureSelect) => {
-    const p = feature.properties || {};
+    rings.forEach((color, idx) => {
+      layers.push(
+        L.circleMarker(latlng, {
+          radius: Math.max(1.2, (isSelected ? 4.2 : 3) - idx * 0.6),
+          fillColor: color,
+          color,
+          weight: 1,
+          opacity: fadedOpacity,
+          fillOpacity: 0.9 * fadedOpacity,
+        })
+      );
+    });
+
+    layers.push(
+      L.circleMarker(latlng, {
+        radius: isSelected ? 1.5 : 1,
+        fillColor: isSelected ? "#fff" : "#f97316",
+        color: "transparent",
+        opacity: fadedOpacity,
+        fillOpacity: fadedOpacity,
+      })
+    );
+
+    return L.featureGroup(layers);
+  };
+
+  const handleFeature = (feature, layer) => {
+    const props = feature.properties || {};
     layer.bindPopup(
       `<div><strong>Property Information</strong></div>
-       Year Filed: ${p.violation_year ?? "N/A"}<br/>
-       Council District: ${p.council_district ?? "N/A"}<br/>
-       L&I Inspection District: ${p.inspect_district ?? "N/A"}<br/>
-       Tract: ${p.censustract ?? "N/A"}<br/>
-       Case Status: ${p.casestatus ?? "N/A"}<br/>
-       Priority: ${p.caseprioritydesc ?? "N/A"}<br/>
-       Violation Resolution Status: ${p.violationresolutioncode ?? "N/A"}<br/>
-       Subcode: ${p.subcode ?? "N/A"}<br/>
-       Violation Class: ${p.viol_class ?? "N/A"}<br/>`
+       Year Filed: ${props.violation_year ?? "N/A"}<br/>
+       Council District: ${props.council_district ?? "N/A"}<br/>
+       L&I Inspection District: ${props.inspect_district ?? "N/A"}<br/>
+       Tract: ${props.censustract ?? "N/A"}<br/>
+       Case Status: ${props.casestatus ?? "N/A"}<br/>
+       Priority: ${props.caseprioritydesc ?? "N/A"}<br/>
+       Violation Resolution Status: ${props.violationresolutioncode ?? "N/A"}<br/>
+       Subcode: ${props.subcode ?? "N/A"}<br/>
+       Violation Class: ${props.viol_class ?? "N/A"}<br/>`
     );
+
+    layer.on("popupopen", () => layer.closePopup());
 
     if (typeof onFeatureSelect === "function") {
       layer.on("click", () => onFeatureSelect(feature));
-    } 
+    }
   };
-
 
   return (
     <GeoJSON
-      key={`violations-${filteredFeatures.length}`}
+      key={`violations-${filteredFeatures.length}-${selectedKey ?? "none"}`}
       data={filtered}
       pointToLayer={pointToLayer}
-      onEachFeature={onEachFeature}
+      onEachFeature={handleFeature}
     />
   );
 }
-
-  
-//   const summary = {};
-//   const yearCounts = buildCounts("violation_year", vf.YEARS);
-//   if (yearCounts) summary.YEARS = yearCounts;
-//   const statusCounts = buildCounts("casestatus", vf.STATUSES);
-//   if (statusCounts) summary.STATUSES = statusCounts;
-//   const inspectCounts = buildCounts("inspect_district", vf.INSPECTDIST);
-//   if (inspectCounts) summary.INSPECTDIST = inspectCounts;
-//   const resolutionCounts = buildCounts("violationresolutioncode", vf.RESOLUTIONCODE);
-//   if (resolutionCounts) summary.RESOLUTIONCODE = resolutionCounts;
-//   const priorityCounts = buildCounts("caseprioritydesc", vf.PRIORITY);
-//   if (priorityCounts) summary.PRIORITY = priorityCounts;
-
-//   onSummaryChange(summary);
-// }, [filteredFeatures, vf, onSummaryChange]);
-
-
-//   // 3. Render markers from filteredFeatures (cap for performance)
-//   const filtered = useMemo(
-//     () => ({
-//       type: "FeatureCollection",
-//       features: filteredFeatures.slice(0, 25000),
-//     }),
-//     [filteredFeatures]
-//   );
-
-// const pointToLayer = (feature, latlng) => {
-//   const layers = [];
-//   layers.push(
-//     L.circleMarker(latlng, {
-//       radius: 4,
-//       fillColor: "#E04833",
-//       color: "#E04833",
-//       weight: 0.5,
-//       opacity: 1,
-//       fillOpacity: 0.9,
-//     })
-//   );
-
-//   const rings = [
-//     yearsFilter.length && FILTER_COLORS.YEARS,
-//     statusesFilter.length && FILTER_COLORS.STATUSES,
-//     inspectFilter.length && FILTER_COLORS.INSPECTDIST,
-//     resolutionFilter.length && FILTER_COLORS.RESOLUTIONCODE,
-//     priorityFilter.length && FILTER_COLORS.PRIORITY,
-//   ].filter(Boolean);
-
-//   rings.forEach((color, idx) => {
-//     layers.push(
-//       L.circleMarker(latlng, {
-//         radius: Math.max(1.5, 4 - (idx + 1) * 0.6),
-//         fillColor: color,
-//         color,
-//         weight: 1,
-//         fillOpacity: 1,
-//         opacity: 1,
-//       })
-//     );
-//   });
-//   return L.layerGroup(layers);
-// };  
-
-// const onEachFeature = (feature, layer) => {
-//     const p = feature.properties || {};
-//     layer.bindPopup(
-//       `<div><strong>Property Information</strong></div>
-//       <div class="popup-filters">${vf.STATUSES?.join(", ") || "All statuses"}</div>
-//       Year Filed: ${p.violation_year ?? "N/A"}<br/>
-//       Council District: ${p.council_district ?? "N/A"}<br/>
-//       L&I Inspection District: ${p.inspect_district ?? "N/A"}<br/>
-//       Tract: ${p.censustract ?? "N/A"}<br/>
-//       Case Status: ${p.casestatus ?? "N/A"}<br/>
-//       Priority: ${p.caseprioritydesc ?? "N/A"}<br/>
-//       Violation Resolution Status: ${p.violationresolutioncode ?? "N/A"}<br/>
-//       Subcode: ${p.subcode ?? "N/A"}<br/>
-//       Violation Class: ${p.viol_class ?? "N/A"}<br/>`
-//     );
-//   };
-
-//   return (
-//     <GeoJSON
-//       key={`violations-${filteredFeatures.length}`}
-//       data={filtered}
-//       pointToLayer={pointToLayer}
-//       onEachFeature={onEachFeature}
-//     />
-//   );
-// }
