@@ -16,7 +16,13 @@ import InsightSummary from "../Insights/InsightSummary";
 export default function MapView({ filters, setFilters }) {
   const [violationSummary, setViolationSummary] = useState({});
   const [selectedViolation, setSelectedViolation] = useState(null);
-const [filteredCount, setFilteredCount] = useState(0);
+  const [filteredCount, setFilteredCount] = useState(0);
+  const [kpiStats, setKpiStats] = useState({
+    hazardCount: 0,
+    openCount: 0,
+    busyDistrict: null,
+  });
+  const [filterTotals, setFilterTotals] = useState(null);
   
   return (
     <div className="dashboard">
@@ -25,7 +31,11 @@ const [filteredCount, setFilteredCount] = useState(0);
           <h1>Philadelphia Code Violations</h1>
           <p>Filter violations, highlight council districts, and compare ACS indicators.</p>
         </div>
-<InsightSummary filteredCount={filteredCount} summary={violationSummary} />
+        <InsightSummary
+          filteredCount={filteredCount}
+          summary={violationSummary}
+          stats={kpiStats}
+        />
         <ViolationDetail
           feature={selectedViolation}
           onClear={() => setSelectedViolation(null)}
@@ -36,6 +46,7 @@ const [filteredCount, setFilteredCount] = useState(0);
           filters={filters}
           setFilters={setFilters}
           summary={violationSummary}
+          optionTotals={filterTotals}
         />
       </div>
 
@@ -60,11 +71,13 @@ onClick={() => setSelectedViolation(null)}
 
           <ViolationsLayer
             violationFilters={filters.violationFilters}
-selectedFeature={selectedViolation}
+            selectedFeature={selectedViolation}
             onFeatureSelect={setSelectedViolation}
             onCountChange={setFilteredCount}
             onSummaryChange={setViolationSummary}
-                      />
+            onStatsChange={setKpiStats}
+            onTotalsChange={setFilterTotals}
+          />
 
           <Legend acsVariables={filters.acsVariables} />
         </MapContainer>

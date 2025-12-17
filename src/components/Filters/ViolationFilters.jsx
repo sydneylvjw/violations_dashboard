@@ -1,6 +1,7 @@
 // these are the filters for violations based on type, severity, date range, etc.
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import "./filters.css";
+import { normalizeFilterValue } from "../../utils/filterUtils";
 
 // creating filter conditions
 const YEARS = [2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023];
@@ -27,10 +28,17 @@ const PRIORITY = [
 ];
 
 
+const MIN_OPTION_TOTAL = 20;
+
 const toggleValue = (current = [], value) =>
   current.includes(value) ? current.filter((v) => v !== value) : [...current, value];
 
-export default function ViolationFilters({ filters, setFilters, summary = {} }) {
+export default function ViolationFilters({
+  filters,
+  setFilters,
+  summary = {},
+  optionTotals = null,
+}) {
   const vf = filters.violationFilters;
   const [openSections, setOpenSections] = useState({
     YEARS: true,
@@ -57,8 +65,38 @@ export default function ViolationFilters({ filters, setFilters, summary = {} }) 
     }));
   };
 
+  const filteredOptions = useMemo(() => {
+    if (!optionTotals) return null;
+
+    const pruneValues = (values, field) => {
+      const totals = optionTotals?.[field];
+      if (!totals) return values;
+      return values.filter((value) => {
+        const key = normalizeFilterValue(value);
+        const total = totals[key] ?? 0;
+        return total >= MIN_OPTION_TOTAL;
+      });
+    };
+
+    return {
+      YEARS: pruneValues(YEARS, "YEARS"),
+      STATUSES: pruneValues(STATUSES, "STATUSES"),
+      INSPECTDIST: pruneValues(INSPECTDIST, "INSPECTDIST"),
+      RESOLUTIONCODE: pruneValues(RESOLUTIONCODE, "RESOLUTIONCODE"),
+      PRIORITY: pruneValues(PRIORITY, "PRIORITY"),
+    };
+  }, [optionTotals]);
+
+  const getValuesForField = (field, defaultValues) => {
+    if (!filteredOptions) return defaultValues;
+    return filteredOptions[field]?.length ? filteredOptions[field] : [];
+  };
+
   const checkboxGroup = (label, values, field) => {
     const isOpen = openSections[field];
+    const allowableValues = getValuesForField(field, values);
+    if (!allowableValues.length) return null;
+
     return (
       <div className={`filter-group ${isOpen ? "is-open" : "is-collapsed"}`} key={field}>
         <button
@@ -72,7 +110,7 @@ export default function ViolationFilters({ filters, setFilters, summary = {} }) 
         </button>
         {isOpen && (
           <div className="filter-options">
-            {values.map((v) => (
+            {allowableValues.map((v) => (
               <label className="filter-option" key={v}>
                 <input
                   type="checkbox"

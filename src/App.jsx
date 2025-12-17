@@ -1,6 +1,7 @@
 
-import { useEffect, useState } from "react";
-import MapView from "./components/MapView/MapView";
+import { Suspense, lazy, useEffect, useState } from "react";
+
+const MapView = lazy(() => import("./components/MapView/MapView"));
 
 const DEFAULT_FILTERS = {
   selectedDistrict: null,
@@ -29,5 +30,9 @@ export default function App() {
     localStorage.setItem("dashboardFilters", JSON.stringify(filters));
   }, [filters]);
 
-    return <MapView filters={filters} setFilters={setFilters} />;
+  return (
+    <Suspense fallback={<div className="app-loading">Loading dashboard…</div>}>
+      <MapView filters={filters} setFilters={setFilters} />
+    </Suspense>
+  );
 }

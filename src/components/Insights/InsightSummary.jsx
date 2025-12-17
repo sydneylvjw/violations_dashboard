@@ -1,13 +1,19 @@
 // KPI cards showing overall violation stats
 
-export default function InsightSummary({ filteredCount = 0, summary = {} }) {
+export default function InsightSummary({ filteredCount = 0, summary = {}, stats = {} }) {
   const hazardCount =
-    summary.PRIORITY?.find(({ value }) => value === "IMMINENTLY DANGEROUS")?.count ?? 0;
+    stats.hazardCount ??
+    summary.PRIORITY?.find(({ value }) => value === "IMMINENTLY DANGEROUS")?.count ??
+    0;
   const openCount =
-    summary.STATUSES?.find(({ value }) => value === null)?.count ?? 0;
-  const busyDistrict = summary.INSPECTDIST
-    ? [...summary.INSPECTDIST].sort((a, b) => b.count - a.count)[0]
-    : null;
+    stats.openCount ??
+    summary.STATUSES?.find(({ value }) => value === null)?.count ??
+    0;
+  const busyDistrict =
+    stats.busyDistrict ??
+    (summary.INSPECTDIST
+      ? [...summary.INSPECTDIST].sort((a, b) => b.count - a.count)[0]
+      : null);
 
   const cards = [
     {
@@ -16,7 +22,7 @@ export default function InsightSummary({ filteredCount = 0, summary = {} }) {
       sublabel: "records in current view",
     },
     {
-      label: "Imminently Dangerous Cases",
+      label: "Hazardous Cases",
       value: hazardCount.toLocaleString(),
       sublabel: "flagged as hazardous",
     },

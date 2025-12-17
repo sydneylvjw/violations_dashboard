@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { GeoJSON } from "react-leaflet";
 import L from "leaflet";
+import { normalizeFilterValue, NULL_KEY } from "../../utils/filterUtils";
 
 const FILTER_COLORS = {
   YEARS: "#c1cbaf",
@@ -20,20 +21,83 @@ const getFeatureKey = (feature) => {
   return `${coords}|${year}|${address}`;
 };
 
+const EMPTY_ARRAY = Object.freeze([]);
+const HAZARD_PRIORITY_KEYWORDS = [
+  "IMMINENTLY DANGEROUS",
+  "IMMINENT DANGER",
+  "IMMEDIATELY DANGEROUS",
+  "DANGER",
+  "HAZARD",
+];
+const HAZARD_PRIORITY_EXACT = new Set(["IMMINENTLY DANGEROUS", "HAZARDOUS"]);
+const OPEN_STATUS_VALUES = new Set(
+  [
+    "IN VIOLATION",
+    "IN VIOLATION - COURT",
+    "STOP WORK",
+    "SVN ISSUED, BALANCE DUE",
+    "UNDER INVESTIGATION",
+    "UNSPECIFIED (NO STATUS)",
+    "UNRESOLVED (NO STATUS)",
+    "OPEN",
+    "OPEN CASE",
+  ].map((value) => value.toUpperCase())
+);
+const OPEN_STATUS_KEYWORDS = [
+  "VIOLATION",
+  "INVESTIGATION",
+  "STOP WORK",
+  "SVN",
+  "BALANCE DUE",
+  "UNRESOLVED",
+  "UNSPECIFIED",
+  "OPEN",
+];
+const EMPTY_STATS = Object.freeze({
+  hazardCount: 0,
+  openCount: 0,
+  busyDistrict: null,
+});
+
 export default function ViolationsLayer({
   violationFilters,
   onSummaryChange,
   onFeatureSelect,
   onCountChange,
   selectedFeature,
+  onStatsChange,
+  onTotalsChange,
 }) {
   const vf = violationFilters || {};
-  const yearsFilter = Array.isArray(vf.YEARS) ? vf.YEARS : [];
-  const statusesFilter = Array.isArray(vf.STATUSES) ? vf.STATUSES : [];
-  const inspectFilter = Array.isArray(vf.INSPECTDIST) ? vf.INSPECTDIST : [];
-  const resolutionFilter = Array.isArray(vf.RESOLUTIONCODE) ? vf.RESOLUTIONCODE : [];
-  const priorityFilter = Array.isArray(vf.PRIORITY) ? vf.PRIORITY : [];
+  const yearsFilter = useMemo(
+    () => (Array.isArray(vf.YEARS) ? vf.YEARS : EMPTY_ARRAY),
+    [vf.YEARS]
+  );
+  const statusesFilter = useMemo(
+    () => (Array.isArray(vf.STATUSES) ? vf.STATUSES : EMPTY_ARRAY),
+    [vf.STATUSES]
+  );
+  const inspectFilter = useMemo(
+    () => (Array.isArray(vf.INSPECTDIST) ? vf.INSPECTDIST : EMPTY_ARRAY),
+    [vf.INSPECTDIST]
+  );
+  const resolutionFilter = useMemo(
+    () => (Array.isArray(vf.RESOLUTIONCODE) ? vf.RESOLUTIONCODE : EMPTY_ARRAY),
+    [vf.RESOLUTIONCODE]
+  );
+  const priorityFilter = useMemo(
+    () => (Array.isArray(vf.PRIORITY) ? vf.PRIORITY : EMPTY_ARRAY),
+    [vf.PRIORITY]
+  );
   const councilFilter = vf.COUNCILDIST ?? null;
+  const hasActiveFilters = Boolean(
+    yearsFilter.length ||
+      statusesFilter.length ||
+      inspectFilter.length ||
+      resolutionFilter.length ||
+      priorityFilter.length ||
+      councilFilter != null
+  );
 
   const [allFeatures, setAllFeatures] = useState([]);
 
@@ -51,7 +115,20 @@ export default function ViolationsLayer({
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof onTotalsChange !== "function") return;
+    if (!allFeatures.length) {
+      onTotalsChange(null);
+      return;
+    }
+
+    const totals = computeFilterTotals(allFeatures);
+    onTotalsChange(totals);
+  }, [allFeatures, onTotalsChange]);
+
   const filteredFeatures = useMemo(() => {
+    if (!hasActiveFilters) return allFeatures;
+
     return allFeatures.filter((feature) => {
       const props = feature.properties || {};
 
@@ -79,6 +156,7 @@ export default function ViolationsLayer({
     });
   }, [
     allFeatures,
+    hasActiveFilters,
     yearsFilter,
     statusesFilter,
     inspectFilter,
@@ -133,6 +211,19 @@ export default function ViolationsLayer({
     onSummaryChange,
   ]);
 
+  const baseStats = useMemo(() => computeStats(allFeatures), [allFeatures]);
+
+  const filteredStats = useMemo(() => {
+    if (!hasActiveFilters) return EMPTY_STATS;
+    return computeStats(filteredFeatures);
+  }, [filteredFeatures, hasActiveFilters]);
+
+  useEffect(() => {
+    if (typeof onStatsChange !== "function") return;
+    const stats = hasActiveFilters ? filteredStats : baseStats;
+    onStatsChange(stats);
+  }, [baseStats, filteredStats, hasActiveFilters, onStatsChange]);
+
   const filtered = useMemo(
     () => ({
       type: "FeatureCollection",
@@ -147,13 +238,9 @@ export default function ViolationsLayer({
     const featureKey = getFeatureKey(feature);
     const isSelected = selectedKey && selectedKey === featureKey;
 
-    if (selectedKey && !isSelected) {
-      return null;
-    }
-
     const layers = [];
     const baseRadius = 5;
-    const fadedOpacity = 1;
+    const fadedOpacity = !selectedKey || isSelected ? 1 : 0.2;
 
     layers.push(
       L.circleMarker(latlng, {
@@ -208,7 +295,13 @@ export default function ViolationsLayer({
       })
     );
 
-    return L.featureGroup(layers);
+    const markerGroup = L.featureGroup(layers);
+    markerGroup.on("add", () => {
+      if (isSelected) {
+        markerGroup.bringToFront();
+      }
+    });
+    return markerGroup;
   };
 
   const handleFeature = (feature, layer) => {
@@ -240,5 +333,98 @@ export default function ViolationsLayer({
       pointToLayer={pointToLayer}
       onEachFeature={handleFeature}
     />
+  );
+}
+
+function computeStats(features) {
+  if (!Array.isArray(features) || !features.length) {
+    return EMPTY_STATS;
+  }
+
+  let hazardCount = 0;
+  let openCount = 0;
+  const districtCounts = new Map();
+
+  features.forEach((feature) => {
+    const props = feature.properties || {};
+    if (isHazardPriority(props.caseprioritydesc)) {
+      hazardCount += 1;
+    }
+    if (isOpenStatus(props.casestatus)) {
+      openCount += 1;
+    }
+    if (props.inspect_district != null) {
+      const key = String(props.inspect_district);
+      districtCounts.set(key, (districtCounts.get(key) ?? 0) + 1);
+    }
+  });
+
+  let busyDistrict = null;
+  if (districtCounts.size) {
+    const [value, count] = [...districtCounts.entries()].sort((a, b) => b[1] - a[1])[0];
+    busyDistrict = { value, count };
+  }
+
+  return { hazardCount, openCount, busyDistrict };
+}
+
+function computeFilterTotals(features) {
+  const totals = {
+    YEARS: new Map(),
+    STATUSES: new Map(),
+    INSPECTDIST: new Map(),
+    RESOLUTIONCODE: new Map(),
+    PRIORITY: new Map(),
+  };
+
+  const increment = (map, rawValue, formatter) => {
+    const prepared =
+      typeof formatter === "function" ? formatter(rawValue) : rawValue;
+    const key = normalizeFilterValue(prepared);
+    if (key === NULL_KEY) return;
+    map.set(key, (map.get(key) ?? 0) + 1);
+  };
+
+  features.forEach((feature) => {
+    const props = feature.properties || {};
+    increment(totals.YEARS, props.violation_year, (value) => {
+      const num = Number(value);
+      return Number.isNaN(num) ? null : num;
+    });
+    increment(totals.STATUSES, props.casestatus);
+    increment(totals.INSPECTDIST, props.inspect_district);
+    increment(totals.RESOLUTIONCODE, props.violationresolutioncode);
+    increment(totals.PRIORITY, props.caseprioritydesc);
+  });
+
+  const serialize = (map) => Object.fromEntries(map.entries());
+
+  return {
+    YEARS: serialize(totals.YEARS),
+    STATUSES: serialize(totals.STATUSES),
+    INSPECTDIST: serialize(totals.INSPECTDIST),
+    RESOLUTIONCODE: serialize(totals.RESOLUTIONCODE),
+    PRIORITY: serialize(totals.PRIORITY),
+  };
+}
+
+function isHazardPriority(priority) {
+  if (priority == null) return false;
+  const normalizedPriority = String(priority).trim().toUpperCase();
+  if (!normalizedPriority) return false;
+  if (HAZARD_PRIORITY_EXACT.has(normalizedPriority)) return true;
+  return HAZARD_PRIORITY_KEYWORDS.some((keyword) =>
+    normalizedPriority.includes(keyword)
+  );
+}
+
+function isOpenStatus(status) {
+  if (status == null) return true;
+  const normalizedStatus = String(status).trim().toUpperCase();
+  if (!normalizedStatus) return true;
+  if (normalizedStatus === "NULL") return true;
+  if (OPEN_STATUS_VALUES.has(normalizedStatus)) return true;
+  return OPEN_STATUS_KEYWORDS.some((keyword) =>
+    normalizedStatus.includes(keyword)
   );
 }
