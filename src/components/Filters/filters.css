@@ -1,0 +1,245 @@
+/* council and hood titles */
+
+
+.filter-panel {
+  color: #111827;
+  text-transform: capitalize;
+  border-radius: 18px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  font-family: "Oswald", sans-serif;
+}
+
+.filter-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+
+/* Code violations panel header */
+.filter-header h3 {
+  margin: 0;
+  letter-spacing: 0.03em;
+  color: #664d50;
+  font-weight: 400;
+  font-size: 1.5rem;
+}
+
+
+/* Code violations subheader directions thing */
+.filter-header p {
+  margin: 0.35rem 0 0;
+  font-size: 0.9rem;
+  font-weight: 300;
+  text-transform: none;
+  letter-spacing: 0.04em;
+  color: #475569;
+}
+
+/* code violations fclear all button */
+.filter-clear {
+  border: 1px solid rgba(148, 163, 184, 0.6);
+  background: transparent;
+  color: #111827;
+  font-weight: 400;
+  border-radius: 999px;
+  padding: 0.35rem 0.95rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.filter-clear:hover {
+  background: rgba(226, 232, 240, 0.08);
+}
+
+/* spacing between filter gorups */
+.filter-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+
+/* line between groups */
+.filter-group {
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+  padding-top: 1rem;
+}
+
+.filter-group.is-collapsed {
+  padding-bottom: 0.25rem;
+}
+
+.filter-group-toggle {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 1rem;
+  font-weight: 400;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.35rem 0;
+  cursor: pointer;
+}
+
+.filter-group-toggle .chevron {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.filter-label {
+  letter-spacing: 0.1em;
+  color: #0f172a;
+  margin-bottom: 0.75rem;
+  font-size: 1rem;
+  text-transform: uppercase;
+  font-weight: 300;
+}
+
+.filter-options {
+font-size: clamp(0.8rem, 1.6vw, 0.95rem);
+  padding: 0.5vh 1.5vw;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4vh 1.5vw;
+}
+
+
+/* filter button */
+.filter-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(148, 163, 184, 0.15);
+  border-radius: 999px;
+  padding: 0.4vh 1.2vw;
+  font-size: clamp(0.8rem, 1.3vw, 1rem);
+  text-transform: capitalize;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  font-weight: 400;
+}
+
+.filter-option input {
+  accent-color: #366144;
+}
+
+.filter-option:hover {
+  background: #549569;
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+
+.kpi-card {
+  background: rgba(148, 163, 184, 0.15);
+  border-radius: 14px;
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.kpi-label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #475569;
+}
+
+.kpi-value {
+  font-size: 1.35rem;
+  font-weight: 500;
+  color: #111827;
+}
+
+.kpi-sublabel {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.kpi-note {
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+  color: #334155;
+}
+
+.filter-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.filter-select-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #111827;
+}
+
+.filter-select-label select {
+  width: 100%;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.8);
+  padding: 0.4rem 0.75rem;
+  font-size: 0.95rem;
+  text-transform: none;
+  background: #fff;
+}
+
+.violation-summary {
+  border-top: 1px solid black;
+  font-weight: 200;
+  padding-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.violation-summary h4 {
+  margin: 0;
+  font-size: 0.95rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #664d50;
+  font-weight: 200;
+}
+
+.summary-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: black;
+}
+
+.summary-row.muted {
+  color: black;
+}
+
+.summary-count {
+  font-weight: 400;
+  color: #bb6425;
+}

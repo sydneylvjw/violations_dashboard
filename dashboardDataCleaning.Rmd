@@ -1,0 +1,392 @@
+---
+title: "JS Dashboard Data Cleaning"
+author: "Sydney Jones Wellborn"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      message = F,
+                      warning = F)
+
+options(scipen = 999)
+
+```
+
+```{r packages}
+
+library(pacman)
+
+p_load(dplyr, tidyverse, ggplot2, sf, dtplyr, tidycensus)
+
+```
+
+
+```{r viols}
+# loading in a pre-cleaned dataset that I have been working on for a separate project. Each observation is an individual violation that has been issued.
+viols <- read_csv("/Users/sydneyjoneswellborn/Library/CloudStorage/OneDrive-PennO365/MCP-MUSA/01. Fall 2025/00. Thesis/Violations/data/violations_codedRAW.csv")
+
+# filtering for residential properties
+violsFilt <- viols %>% 
+  filter(c_dig2 == "Residential",
+         violation_year %in% 2010:2025)
+
+
+# spatializing so that we can join to the L&I districts
+violsFiltSF <- violsFilt %>% 
+  st_as_sf(coords = c("geocode_x", "geocode_y"),
+           crs = 2272) %>% 
+  st_make_valid()
+
+plot(violsFiltSF)
+
+```
+
+```{r districts}
+# loading in the L&I districts from opendataphilly
+dist <- st_read("https://opendata.arcgis.com/datasets/7275a4266f86471ca1d55a12e01b077e_0.geojson")
+
+dist <- dist %>% 
+  select(OBJECTID, DISTRICT, OPS_ADDR, geometry)
+
+st_crs(dist)
+st_crs(violsFiltSF)
+  
+
+```
+
+
+```{r tractPanel}
+# building out a panel of violation data with census tract as the unit of analysis so that I can join ACS data to this later. 
+
+# transforming district crs fro 2272 to 4326 so that it is projected in feet instead of meters
+violsFiltSF <- violsFiltSF %>% 
+  st_transform(4326)
+
+st_crs(violsFiltSF)
+
+# joining the L&I districts to the violation data
+violsFiltSF <- violsFiltSF %>% 
+  st_join(y = dist,
+          join = st_intersects)
+
+# selecting relevant attributes. I'm going to try and run the 
+ tractPanel <- violsFiltSF %>% 
+   select(addressobjectid,
+          parcel_id_num,
+          council_district,
+          inspect_district = DISTRICT,
+          caseprioritydesc,
+          casestatus,
+          violation_year,
+          violationresolutioncode,
+          censustract,
+          subcode,
+          viol_class,
+          geometry)
+ 
+ 
+ # engineering features. Come back to this later---you need to summarize each count separately and hten merge them back into one single panel using group_by() and summarize() and full_join().
+ 
+ 
+tractPanel <- tractPanel %>% # tract-level data
+  group_by(censustract, violation_year) %>%
+  mutate(tractViols = n()) %>%
+  ungroup() %>%
+  group_by(council_district, violation_year) %>% # council district-level data
+  mutate(councilDistViols = n()) %>%
+  ungroup() %>%
+  group_by(inspect_district, violation_year) %>% # L&I district-level data
+  mutate(inspectDistViols = n()) %>%
+  ungroup()
+
+# normalizing the count of violations so we can see if there is meaningful variance present. scale() transforms the count so mean = 0, sd = 1.
+tractPanel <- tractPanel %>%
+  mutate(tractViolsZ = scale(tractPanel$tractViols),
+         councilDistZ = scale(tractPanel$councilDistViols),
+         inspectDistZ = scale(tractPanel$inspectDistViols))
+
+
+# mutating an additional column by subcode
+tractPanel <- tractPanel %>% 
+  group_by(censustract, violation_year, subcode) %>% 
+  mutate(tractSubcode = n()) %>% 
+  ungroup() %>% 
+  group_by(council_district, violation_year, subcode) %>% 
+  mutate(councilSubcode = n()) %>% 
+  ungroup() %>% 
+  group_by(inspect_district, violation_year, subcode) %>% 
+  mutate(inspectSubcode = n()) %>% 
+  ungroup() %>% 
+  group_by(censustract, violation_year, casestatus) %>% 
+  mutate(tractStatus = n()) %>% 
+  ungroup() %>% 
+  group_by(council_district, violation_year, casestatus) %>% 
+  mutate(councilStatus = n()) %>% 
+  ungroup() %>% 
+  group_by(inspect_district, violation_year, casestatus) %>% 
+  mutate(inspectStatus = n()) %>% 
+  ungroup() %>% 
+  group_by(censustract, violation_year, violationresolutioncode) %>% 
+  mutate(tractResCode = n()) %>% 
+  ungroup() %>% 
+  group_by(council_district, violation_year, violationresolutioncode) %>% 
+  mutate(councilResCode = n()) %>% 
+  ungroup() %>% 
+  group_by(inspect_district, violation_year, violationresolutioncode) %>% 
+  mutate(inspectResCode = n()) %>% 
+  ungroup() %>% 
+  group_by(censustract, violation_year, viol_class) %>% 
+  mutate(tractViolClass = n()) %>% 
+  ungroup() %>% 
+  group_by(council_district, violation_year, viol_class) %>% 
+  mutate(councilViolClass = n()) %>% 
+  ungroup() %>% 
+  group_by(inspect_district, violation_year, viol_class) %>% 
+  mutate(inspectViolClass = n()) %>% 
+  ungroup() %>% 
+  group_by(censustract, violation_year, caseprioritydesc) %>% 
+  mutate(tractPriority = n()) %>% 
+  ungroup() %>% 
+  group_by(council_district, violation_year, caseprioritydesc) %>% 
+  mutate(councilPriority = n()) %>% 
+  ungroup() %>% 
+  group_by(inspect_district, violation_year, caseprioritydesc) %>% 
+  mutate(inspectPriority = n()) %>% 
+  ungroup()  
+  
+councilPanel <- tractPanel %>% 
+  select(violation_year,
+         censustract,
+         inspect_district,
+         council_district,
+         councilDistViols,
+         councilDistZ,
+         violationresolutioncode,
+         councilResCode,
+         casestatus,
+         councilStatus,
+         subcode,
+         councilSubcode,
+         caseprioritydesc,
+         councilPriority,
+         viol_class,
+         councilViolClass) %>% 
+  distinct()
+
+inspectPanel <- tractPanel %>% 
+  select(violation_year,
+         council_district,
+         censustract,
+         inspect_district,
+         inspectDistViols,
+         inspectDistZ,
+         violationresolutioncode,
+         inspectResCode,
+         casestatus,
+         inspectStatus,
+         subcode,
+         inspectSubcode,
+         caseprioritydesc,
+         inspectPriority,
+         viol_class,
+         inspectViolClass) %>% 
+  distinct()
+
+ctPanel <- tractPanel %>% 
+  select(violation_year,
+         inspect_district,
+         council_district,
+         censustract,
+         tractViols,
+         tractViolsZ,
+         violationresolutioncode,
+         tractResCode,
+         casestatus,
+         tractStatus,
+         subcode,
+         tractSubcode,
+         caseprioritydesc,
+         tractPriority,
+         viol_class,
+         tractViolClass) %>% 
+  distinct()
+
+hist(councilPanel$councilDistZ)
+hist(ctPanel$tractViolsZ)
+hist(inspectPanel$inspectDistZ)
+
+# joining all by ct, district, council dist and year into one panel. Will drop the geom from councilPanel and inspectPanel first to keep it easy.
+# 
+# inspectDf <- inspectPanel %>% 
+#   st_drop_geometry()
+# 
+# councilDf <- councilPanel %>% 
+#   st_drop_geometry()
+# 
+# 
+# # full join to keep all rows from both datasets
+# violPanel <- ctPanel %>% 
+#   left_join(councilDf, by = c("violation_year", "censustract", "council_district", "inspect_district"))
+# #this keeps creating a bazillion rows, I'm going to remove the df and just move on and use them separately. No need to overcomplicate it.
+
+# transforming year, council dist into characters
+councilPanel <- councilPanel %>% 
+  mutate(violation_year = as.character(councilPanel$violation_year),
+         council_district = as.character(councilPanel$council_district))
+
+inspectPanel <- inspectPanel %>% 
+  mutate(violation_year = as.character(inspectPanel$violation_year),
+         council_district = as.character(inspectPanel$council_district))
+
+ctPanel <- ctPanel %>% 
+  mutate(violation_year = as.character(ctPanel$violation_year),
+         council_district = as.character(ctPanel$council_district))
+
+```
+
+```{r acsPull}
+library(tidycensus)
+
+# writing a function so that I can pull multiple years of acs data at once
+get_multi_acs <- function(years, 
+                          geography,
+                          variables,
+                          survey = "acs5",
+                          ...) {
+  map_df(years, function(y) {
+    get_acs(geography = geography,
+    variables = variables,
+    year = y,
+    survey = survey,
+    ...
+    ) %>% 
+    mutate(year = y)
+  })
+}
+
+# pulling variables so I can choose what I want to use
+vars <- tidycensus::load_variables(year = 2023,
+                                   dataset = "acs5",
+                                   cache = T)
+
+# creating a variable of vectors of interest
+varVect <- c(popTot = "B01003_001", #total population
+             popWhite = "B01001H_001",
+             popHispLat = "B01001I_001",
+             popBlack = "B01001B_001",
+             popAsian = "B01001D_001",
+             popMixed = "B01001G_001",
+             medHHinc = "B19013A_001",
+             pctPov = "B17001_001", #percentage earning below the poverty level in the last 12 months
+             medYrBuilt = "B25035_001", #median year structure built
+             unitsTot = "B25003_001", #total housing units
+             avgHHsize = "B25010_001", #average hh size
+             ownOcc = "B25003_002", #total owner occupied units
+             ownOccAvgHHsize = "B25010_002", #avg household size of owner occupied units
+             rentOccAvgHHsize = "B25010_003", #avg hh size of rent occ units
+             rentOcc = "B25003_003", #total renter occupied units
+             medSMOCAPI = "B25092_001",#med selected monthly owner costs as a pct of income
+             medGRAPI = "B25071_001" #med gross rent as pct of income
+             )
+
+
+acs <- get_multi_acs(
+  years = 2010:2023,
+  geography = "tract",
+  state = "PA",
+  county = "Philadelphia County",
+  variables = varVect,
+  output = "wide",
+  geometry = T
+)
+
+# mutating columns for population and tenure percentages and standardized z-scores
+acs <- acs %>% 
+  mutate(pctWhite = popWhiteE / popTotE * 100,
+         pctBlack = popBlackE / popTotE * 100,
+         pctHisLat = popHispLatE / popTotE * 100,
+         pctAsian = popAsianE / popTotE * 100,
+         pctMixed = popMixedE / popTotE * 100,
+         pctOwnOcc = ownOccE / unitsTotE * 100,
+         pctRentOcc = rentOccE / unitsTotE * 100,
+         pctWhiteZ = scale(acs$pctWhite),
+         pctBlackZ = scale(acs$pctBlack),
+         pctHisLatZ = scale(acs$pctHisLat),
+         pctAsianZ = scale(acs$pctAsian),
+         pctMixedZ = scale(acs$pctMixed),
+         pctOwnOccZ = scale(acs$pctOwnOcc),
+         pctRentZ = scale(acs$pctRentOcc))
+
+# mutating out the last 6 digits of the geoid into a censustract column to match the panel info for easy joining
+acs <- acs %>% 
+  mutate(censustract = substr(GEOID, 6, 11))
+
+
+#trimming down to necessary columns only
+acsTrim <- acs %>% 
+  select(censustract,
+         NAME,
+         year,
+         popTotE,
+         popWhiteE,
+         pctWhite,
+         pctWhiteZ,
+         popBlackE,
+         pctBlack,
+         pctBlackZ,
+         popHispLatE,
+         pctHisLat,
+         pctHisLatZ,
+         popAsianE,
+         pctAsian,
+         pctAsianZ,
+         popMixedE,
+         pctMixed,
+         pctMixedZ,
+         medHHincE,
+         pctPovE,
+         medYrBuiltE,
+         unitsTotE,
+         avgHHsizeE,
+         ownOccE,
+         pctOwnOcc,
+         pctOwnOccZ,
+         ownOccAvgHHsizeE,
+         medSMOCAPIE,
+         rentOccE,
+         pctRentOcc,
+         pctRentZ,
+         rentOccAvgHHsizeE,
+         medGRAPIE
+         )
+
+
+
+```
+
+```{r exportData}
+# writing jsons of acs and panel data
+
+st_write(acs, 
+         "/Users/sydneyjoneswellborn/Documents/GitHub/JavaScript_6116/violations_dashboard/data/acs.json", 
+         driver = "geoJSON",
+         delete_dsn = T)
+
+st_write(ctPanel, 
+         "/Users/sydneyjoneswellborn/Documents/GitHub/JavaScript_6116/violations_dashboard/data/tractPanel.json", 
+         driver = "geoJSON",
+         delete_dsn = T)
+
+st_write(inspectPanel, 
+         "/Users/sydneyjoneswellborn/Documents/GitHub/JavaScript_6116/violations_dashboard/data/inspectPanel.json", 
+         driver = "geoJSON",
+         delete_dsn = T)
+
+st_write(councilPanel, 
+         "/Users/sydneyjoneswellborn/Documents/GitHub/JavaScript_6116/violations_dashboard/data/councilPanel.json", 
+         driver = "geoJSON",
+         delete_dsn = T)
+
+```
+
